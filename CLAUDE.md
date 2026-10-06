@@ -30,6 +30,8 @@ jbohack, MIT. The attribution headers in `src/detector.cpp` and
 
 ## Status
 
+Repo: <https://github.com/datafx/alpr_detector> (public, branch `master`).
+
 Builds clean (`pio run`); both off-target suites pass. **Bench-tested on
 hardware 2026-10-06**, with a Linux PC as the transmitter:
 
@@ -288,11 +290,16 @@ Validate in this order; don't skip ahead when something fails.
 5. **SSID alert path** — rename a phone hotspot to `ALPRDET-TEST`; the second
    line should read `SSID beacon: ALPRDET-TEST`. Remove that row before
    relying on the table for anything real.
-6. **BLE signature path** (not yet run on hardware) — with nRF Connect on a
-   phone, advertise local name `Penguin-0123456789` (or manufacturer data
-   with company ID `0x09C8`). Expect `Flock Safety` / `BLE name Penguin-...`
-   (or `Flock? (0x09C8)` / `BLE mfg 0x09C8`). Phones advertise from random
-   addresses, so this also confirms decision 4.
+6. **BLE signature path** — from a Linux PC with bluetoothctl (`menu
+   advertise`, `interval 100 100`, then `advertise on`):
+   - `uuids 0x3100` → `Flock Raven` / `BLE svc 0x3100`
+   - `manufacturer 0x09c8 0x01 0x02` → `Flock? (0x09C8)` / `BLE mfg 0x09C8`
+
+   Names can't be faked this way (see Bench-testing notes). To check the
+   name path, flash `esp32dev_debug`, add a temporary row matching a named
+   device that shows up in its serial output, confirm the alert, then revert.
+   bluetoothctl adverts come from a random address, so this also confirms
+   decision 4.
 7. **Flash-rate scaling** — move the test device closer/further; flash speeds
    up as RSSI rises.
 

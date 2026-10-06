@@ -69,8 +69,7 @@ static const BleSigEntry BLE_SIG_TABLE[] = {
     // "BWCDEVICE": body cams self-identify with this ASCII tag inside a
     // 128-bit service UUID (AD 0x21, reads "AXJANUSBWCDEVICE" byte-reversed).
     // Survives Axon's move to rotating addresses. Source: all-cameras-are-
-    // beacons field capture, owner-confirmed 2026-09-19; also referenced
-    // by the original le_detector's CLAUDE.md research notes.
+    // beacons field capture, owner-confirmed 2026-09-19.
     { BLE_SIG_PAYLOAD_ASCII,      "BWCDEVICE",      0,      nullptr, "Axon bodycam", CAT_BODYCAM },
     // Bluetooth SIG: company ID 0x034D and member UUIDs 0xFE6B/0xFE6C are
     // "TASER International, Inc."; 0xFC81 is "Axon Enterprise, Inc.". These

@@ -27,10 +27,9 @@ static const uint32_t BUTTON_HOLD_MS     = 1000;  // extend if 1s proves too eas
 // ---------------------------------------------------------------------------
 // Radio scheduling
 //
-// The ESP32 has ONE 2.4 GHz radio shared between WiFi and BLE. nyanBOX handles
-// this by fully tearing one stack down before bringing the other up, and we do
-// the same. That means detection is time-sliced: during the BLE window we are
-// blind to WiFi and vice versa.
+// The ESP32 has ONE 2.4 GHz radio shared between WiFi and BLE, so one stack is
+// fully torn down before the other is brought up. That means detection is
+// time-sliced: during the BLE window we are blind to WiFi and vice versa.
 //
 // Shorter windows = tighter revisit interval (better at highway speed) but more
 // time lost to stack init/teardown, which costs ~100-200 ms each way.
@@ -43,8 +42,8 @@ static const uint32_t CHANNEL_HOP_MS      = 250;   // 11 ch * 250 ms = 2.75 s
 // dwell time.
 static const uint8_t  WIFI_MAX_CHANNEL    = 11;
 
-// Passive = receive only, we never transmit. nyanBOX ships ACTIVE (which sends
-// scan requests); set this false only if you specifically want active scanning.
+// Passive = receive only, we never transmit. ACTIVE sends scan requests; set
+// this false only if you specifically want active scanning.
 static const bool BLE_SCAN_PASSIVE = true;
 
 // ---------------------------------------------------------------------------

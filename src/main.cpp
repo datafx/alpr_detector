@@ -1,7 +1,8 @@
 /*
-    LE Gear Detector - ESP32-WROOM-32U DevKitC
+    ALPR Detector - ESP32-WROOM-32U DevKitC
 
-    Passive BLE + WiFi scanner that watches for OUIs on a vendor watchlist and
+    Passive BLE + WiFi scanner for ALPR cameras, police surveillance sensors
+    and LE gear. Matches OUIs, SSIDs and BLE advertisement signatures, and
     signals hits on an LED and buzzer, flashing faster as the signal gets stronger.
 
     Portions adapted from nyanBOX (https://github.com/jbohack/nyanBOX)
@@ -112,7 +113,7 @@ void setup() {
 
     delay(600);
 
-    s_prefs.begin("ledet", false);
+    s_prefs.begin("alprdet", false);
     s_bandMode = (BandMode)s_prefs.getUChar("bandMode", BAND_BOTH);
 
     if (s_bandMode == BAND_BLE_ONLY) {

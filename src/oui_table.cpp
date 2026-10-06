@@ -2,31 +2,20 @@
 #include "oui_table.h"
 #include <string.h>
 
-// Defined in user_oui_table.cpp - a small unsorted staging table for OUIs
-// someone's testing locally before submitting them as a PR into the main
-// table below. Linear-scanned as a fallback once the main table's binary
-// search comes up empty.
-extern const OuiEntry* ouiUserLookup(const uint8_t mac[6]);
-
 // ---------------------------------------------------------------------------
 // LAW ENFORCEMENT / ALPR EQUIPMENT WATCHLIST
 //
 // Every entry is an IEEE registry assignment (MA-L /24, MA-M /28, MA-S /36),
-// cross-checked against the registrant's street address. Nothing is from memory.
+// cross-checked against the registrant's street address. Nothing is from
+// memory. The one exception (D8:1F:65) is called out below.
 //
-// 20 entries were confirmed against nyanBOX's own LE Gear Detector, whose OUI
-// list was XOR-obfuscated in firmware and recovered by decrypting it (see
-// tools/decrypt_nyan_ouis.py). Their list and ours agreed on 25 prefixes; the
-// LE-relevant vendors they had that we lacked were added here after the usual
-// IEEE address check.
-//
-// Anchor: 00:25:DF -> "Axon Enterprise, Inc., 17800 N 85th St, Scottsdale AZ",
-// the same prefix nyanBOX hard-codes in axon_detector.cpp.
+// Anchor: 00:25:DF -> "Axon Enterprise, Inc., 17800 N 85th St, Scottsdale AZ".
 //
 // SPECIFICITY is the important column. SPEC_LE_ONLY vendors sell essentially
 // nowhere else, so a hit means something. SPEC_BROAD vendors are real police
-// suppliers whose prefixes also ship on enormous volumes of civilian gear, so
-// they are capped at MEDIUM confidence forever.
+// suppliers whose prefixes also ship on enormous volumes of civilian gear.
+// Curation metadata only - every match alerts the same way; a SPEC_BROAD
+// vendor that proves noisy gets an EXCLUDE_VENDOR_* toggle below.
 //
 // DELIBERATELY EXCLUDED - name collisions that would cause false alerts:
 //   00:01:21, 00:90:7F  WatchGuard Technologies (Seattle) = FIREWALLS, not
@@ -41,16 +30,14 @@ extern const OuiEntry* ouiUserLookup(const uint8_t mac[6]);
 //   D4:63:52            Vutility Inc. (energy metering) is not Utility, Inc.
 //                       (BodyWorn) at 00:09:BC/00:16:ED above.
 //
-// Cross-checked 2026-09-04 against JakeSwiz/end-0f-watch's police_ouis.json
-// (github.com/JakeSwiz/end-0f-watch), which documents these same four
-// collisions plus the ones we already had recorded.
-//
 // DELIBERATELY EXCLUDED - too broad to carry any signal:
 //   Dell, Panasonic  - Toughbook/laptop MDTs are ubiquitous patrol gear, but
 //                      these prefixes are on tens of millions of consumer
 //                      machines. A hit would mean nothing.
+//   Peplink D4:13:F8, Pepwave A8:C0:EA - vehicle routers; false alarms only,
+//                      zero true positives in field testing.
 //
-// ALPR / SURVEILLANCE ADDITIONS (2026-10-06, alpr_detector fork). Checked
+// ALPR / SURVEILLANCE VENDORS. Checked
 // against Wireshark's IEEE-derived manuf file (standards-oui.ieee.org itself
 // refuses scripted downloads), with registrant names matching:
 //   B4:1E:52           Flock Safety (MA-L). Flock's own block - LE_ONLY.
@@ -93,9 +80,7 @@ extern const OuiEntry* ouiUserLookup(const uint8_t mac[6]);
 // below are for the opposite direction: flipping a whole vendor off by
 // default for everyone who builds this, without deleting it from the
 // source.) Adding a new OUI here means finding its correct sorted spot by
-// hand; if you'd rather not deal with that, add it to
-// `user_oui_table.cpp` instead - that table is unsorted and appended to,
-// exactly for this.
+// hand, then adding a matching case to test/test_oui.cpp.
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
@@ -107,10 +92,10 @@ extern const OuiEntry* ouiUserLookup(const uint8_t mac[6]);
 // entries doesn't affect the table's sort order or the binary search, so
 // nothing else needs to change.
 //
-// CRADLEPOINT IS EXCLUDED BY DEFAULT (2026-09-02): a second real-world test
-// drive turned up zero true positives on PD vehicles and a steady stream of
-// false positives - school buses and cellular PTZ cameras on the turnpike,
-// both ordinary CradlePoint fleet-router customers. It's real LE gear too,
+// CRADLEPOINT IS EXCLUDED BY DEFAULT: field testing turned up zero true
+// positives on PD vehicles and a steady stream of false positives - school
+// buses and cellular PTZ cameras on the turnpike, both ordinary CradlePoint
+// fleet-router customers. It's real LE gear too,
 // so the toggle is here, not a table deletion - only re-enable it (comment
 // the #define back out) if you've independently confirmed CradlePoint gear
 // on vehicles you care about detecting; on unfiltered general-purpose
@@ -215,8 +200,6 @@ static const OuiEntry OUI_TABLE[] = {
 #ifndef EXCLUDE_VENDOR_MOTOROLA
   { { 0x9C,0x86,0x2B,0x00,0x00 }, 24, "Motorola Sol",     CAT_RADIO,     SPEC_BROAD      },
 #endif
-  // Disabled locally 2026-09-11: same company as Peplink above, same false-positive profile.
-  // { { 0xA8,0xC0,0xEA,0x00,0x00 }, 24, "Pepwave",          CAT_VEHICLE,   SPEC_BROAD      },
   { { 0xB4,0x1E,0x52,0x00,0x00 }, 24, "Flock Safety",     CAT_ALPR,      SPEC_LE_ONLY    },
 #ifndef EXCLUDE_VENDOR_MOTOROLA
   { { 0xB8,0xE2,0x8C,0x00,0x00 }, 24, "Motorola Sol",     CAT_RADIO,     SPEC_BROAD      },
@@ -226,8 +209,6 @@ static const OuiEntry OUI_TABLE[] = {
   { { 0xCC,0x93,0x4A,0x00,0x00 }, 24, "Sierra Wireless",  CAT_VEHICLE,   SPEC_BROAD      },
 #endif
   { { 0xD4,0x11,0xD6,0x00,0x00 }, 24, "ShotSpotter",      CAT_SENSOR,    SPEC_LE_ONLY    },
-  // Disabled locally 2026-09-11: false-positive-only, no true hits observed.
-  // { { 0xD4,0x13,0xF8,0x00,0x00 }, 24, "Peplink",          CAT_VEHICLE,   SPEC_BROAD      },
   { { 0xD8,0x1F,0x65,0x00,0x00 }, 24, "Axon",             CAT_BODYCAM,   SPEC_LE_ONLY    },  // IEEE "Private"; field-attributed, see block comment
   { { 0xE0,0xDA,0xDC,0x00,0x00 }, 24, "JVC Kenwood",      CAT_RADIO,     SPEC_BROAD      },
   { { 0xE4,0x1E,0x0A,0xB0,0x00 }, 28, "Safety Vision",    CAT_BODYCAM,   SPEC_BROAD      },
@@ -265,7 +246,7 @@ const OuiEntry* ouiLookup(const uint8_t mac[6]) {
         if (c < 0)  hi = mid - 1;
         else        lo = mid + 1;
     }
-    if (found < 0) return ouiUserLookup(mac);
+    if (found < 0) return nullptr;
 
     // Several vendors can share the same three bytes when a block is carved
     // into /28 or /36 assignments, so walk the whole run.
@@ -276,5 +257,5 @@ const OuiEntry* ouiLookup(const uint8_t mac[6]) {
         if (cmp3(OUI_TABLE[i].prefix, mac) != 0) break;
         if (matches(OUI_TABLE[i], mac)) return &OUI_TABLE[i];
     }
-    return ouiUserLookup(mac);
+    return nullptr;
 }

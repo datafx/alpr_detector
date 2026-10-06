@@ -10,12 +10,7 @@ law-enforcement gear. It checks three things:
   payload tags (Flock Penguin battery packs, Flock Raven, Axon body cams)
 
 Hits show on an OLED and trigger an LED and buzzer that flash faster as the
-signal gets stronger.
-
-Forked 2026-10-06 from [datafx/le_detector](https://github.com/datafx/le_detector),
-which is deprecated upstream in favour of
-[datafx/le_detector_c5](https://github.com/datafx/le_detector_c5) (adds 5 GHz).
-This fork keeps the original WROOM-32U hardware and stays 2.4 GHz-only.
+signal gets stronger. It only receives — it never transmits.
 
 ## What it can and can't see
 
@@ -52,19 +47,14 @@ If you already have PlatformIO Core set up:
 
      (`pipx install platformio` works too, if that's your preference.)
 
-2. **Get the code:**
-
-         git clone https://github.com/datafx/le_detector.git
-         cd le_detector
-
-   No `git`? Click **Code → Download ZIP** on the GitHub page and extract
-   it instead.
+2. **Get the code** — clone or download this repository into a folder
+   named `alpr_detector`.
 
 3. **Open the project.**
-   - VS Code: **File → Open Folder**, select the `le_detector` folder.
+   - VS Code: **File → Open Folder**, select the `alpr_detector` folder.
      PlatformIO reads `platformio.ini` and configures itself for this
      project automatically — nothing to set up by hand.
-   - Command line: just stay inside the `le_detector` directory; every
+   - Command line: just stay inside the `alpr_detector` directory; every
      `pio` command below assumes that's your working directory.
 
 4. **Plug in the board** via micro-USB. Chip type, flash size, and the
@@ -81,17 +71,15 @@ If you already have PlatformIO Core set up:
    This should auto-detect the board and flash it without pressing
    anything on the board itself — the DevKitC's onboard USB-serial chip
    handles the reset. If upload fails with a timeout or "Failed to
-   connect": hold **BOOT**, tap **EN**, release **BOOT**, then retry (see
-   Gotchas in `CLAUDE.md` for why this is sometimes needed).
+   connect": hold **BOOT**, tap **EN**, release **BOOT**, then retry.
 
 6. **Watch it boot** (optional):
 
          pio device monitor
 
-   This project doesn't do serial logging during normal operation — a
-   deliberate design choice, see `CLAUDE.md` — so past the initial boot
-   banner you won't see a running stream of output. That's expected, not
-   a sign something's broken; the OLED is the real status display.
+   There's no serial logging during normal operation — a deliberate design
+   choice — so past the initial boot banner you won't see a running stream
+   of output. The OLED is the status display.
 
 ### If the board doesn't show up as a serial port
 
@@ -104,6 +92,17 @@ If you already have PlatformIO Core set up:
   distros. Add yourself and re-log-in for it to take effect:
 
       sudo usermod -aG dialout $USER   # or: uucp, on Arch-based distros
+
+## Using it
+
+- **Tap BOOT** — mute the buzzer for the current alert (the LED keeps flashing).
+- **Hold BOOT 1 s** — cycle band mode: WiFi only → BLE only → both. Saved
+  across power cycles.
+
+The header shows `ALL CLEAR` or `** ALERT **` and the current band. During
+an alert the screen shows the vendor, what matched (`SSID beacon: …`,
+`SSID probe: …`, `BLE name …`, `BLE svc 0x…`, `via WiFi OUI`, …) and a
+signal-strength bar.
 
 ## Wiring
 
@@ -123,48 +122,38 @@ Power via micro-USB. EN is left unwired.
 | ESP32-WROOM-32U DevKitC (38-pin) | The `-U` variant — external antenna via U.FL, not the PCB-antenna `-D` variant |
 | SSD1306 128x64 OLED, I2C | Any standard 4-pin (GND/VCC/SCL/SDA) module |
 | LED, any color | + 270R resistor, GPIO25 to GND |
-| Active buzzer module, 3.3–5V | Must be an *active* module (built-in oscillator, just needs a logic level), not passive/piezo. Check `BUZZER_ACTIVE_LOW` in `config.h` against your specific module — some trigger on LOW (see Gotchas below) |
+| Active buzzer module, 3.3–5V | Must be an *active* module (built-in oscillator, just needs a logic level), not passive/piezo. Check `BUZZER_ACTIVE_LOW` in `config.h` against your module — some trigger on LOW |
 | U.FL → RP-SMA pigtail | Connects the WROOM-32U's onboard U.FL to an external antenna |
 | Alfa APA-M25 (8 dBi directional panel) or equivalent 2.4 GHz antenna | RP-SMA connector |
-| Breadboard + jumper wires | Or a PCB — see the EN-pin note below if you're laying one out |
+| Breadboard/perfboard + wire | Or a PCB — see the EN-pin note below |
 | Micro-USB cable | Power + programming; no external supply needed |
 
 No 5V rail needed anywhere — the buzzer runs off the same 3V3 the DevKitC
 outputs on J2 pin 1, and everything else is 3.3V logic.
 
-**Building a PCB instead of breadboarding?** Add a 100nF–1µF ceramic
-capacitor between EN and GND. The reference build runs EN bare (just its
-onboard pull-up) and hit a burst of spurious resets that pointed at EN-pin
-noise on the breadboard's high-impedance wiring — see the reset-loop note in
-`CLAUDE.md` for the full writeup. The cap is cheap, standard practice on
-ESP32 designs, and worth including on a PCB layout regardless of whether
-that was the actual cause on the breadboard.
+**Building a PCB?** Add a 100nF–1µF ceramic capacitor between EN and GND.
+A bare EN pin (onboard pull-up only) on breadboard wiring produced bursts of
+spurious resets that pointed at EN-pin noise. The cap is cheap and standard
+practice on ESP32 designs.
 
-## Watchlist
+## OUI watchlist
 
-80 prefixes across 50+ law-enforcement, ALPR and surveillance vendors (76
-compiled in by default — see below). All are IEEE-registered except
-`D8:1F:65`, which the registry lists as "Private" and which field capture
-attributes to Axon. Any match on the list alerts the same
-way — there's no confidence tier, since a weak signal still needs a reaction.
-Each entry is tagged by how exclusively its vendor sells to LE (**LE-only**
-vs **broad**, meaning it also ships on large volumes of civilian gear) purely
-as curation info: broad vendors that turn out to be a false-positive source
-get compiled out entirely (see the `EXCLUDE_VENDOR_*` toggles in
-`oui_table.cpp` — CradlePoint is off by default for exactly this reason)
-rather than downgraded.
+78 prefixes across 50+ law-enforcement, ALPR and surveillance vendors (76
+compiled in by default — CradlePoint is excluded, see below). All are
+IEEE-registered except `D8:1F:65`, which the registry lists as "Private" and
+which field capture attributes to Axon. Any match alerts the same way.
 
-Supports /24 (MA-L), /28 (MA-M) and /36 (MA-S) assignments. Prefixes shown with
-a trailing `N_` are sub-/24 blocks where only the high nibble of the next byte is
-significant. Keep the array sorted ascending; lookup is a binary search. Run
-`test/test_oui.cpp` after edits.
+Each entry is tagged by how exclusively its vendor sells to LE (**LE-only** vs
+**broad**, meaning it also ships on lots of civilian gear) purely as curation
+info: broad vendors that turn out to be a false-positive source get compiled
+out with an `EXCLUDE_VENDOR_*` toggle in `oui_table.cpp` (CradlePoint is off by
+default for exactly this reason).
 
-Don't want a specific entry? Just comment out its row in `oui_table.cpp` —
-removing a row can't break the sort order, so no rebuild flag or macro is
-needed. Want to add one locally before submitting it upstream? Drop it in
-`user_oui_table.cpp` instead, which is unsorted and just appended to.
-
-### Complete list
+Supports /24 (MA-L), /28 (MA-M) and /36 (MA-S) assignments. Prefixes shown
+with a trailing `N_` are sub-/24 blocks where only the high nibble of the next
+byte is significant. Keep the array sorted ascending; lookup is a binary
+search. Run `test/test_oui.cpp` after edits. To drop an entry, comment out its
+row — that can't break the sort order.
 
 | Prefix | Vendor | Category | Specificity |
 |---|---|---|---|
@@ -236,129 +225,50 @@ needed. Want to add one locally before submitting it upstream? Drop it in
 | `9C:06:6E` | Hytera | Radio | broad |
 | `9C:83:BF` | PRO-VISION | Body/car cam | LE-only |
 | `9C:86:2B` | Motorola Sol | Radio | broad |
-| `A8:C0:EA` | Pepwave | Veh router | broad |
 | `B4:1E:52` | Flock Safety | Plate reader | LE-only |
 | `B8:E2:8C` | Motorola Sol | Radio | broad |
 | `BC:AD:90` | Kymeta | Veh router | broad |
 | `CC:93:4A` | Sierra Wireless | Veh router | broad |
 | `D4:11:D6` | ShotSpotter | Surveillance sensor | LE-only |
-| `D4:13:F8` | Peplink | Veh router | broad |
 | `D8:1F:65` | Axon | Body/car cam | LE-only |
 | `E0:DA:DC` | JVC Kenwood | Radio | broad |
 | `E4:1E:0A:B_` | Safety Vision | Body/car cam | broad |
 | `F4:69:D5:7_` | Rosco Vision | Body/car cam | broad |
 | `FC:01:9E` | VieVu | Body/car cam | LE-only |
 
-### Provenance
-
-Every prefix is an IEEE MA-L/MA-M/MA-S assignment, verified against the
-registrant's street address (not vendor-name guesses) via an IEEE registry
-sweep for known LE equipment makers.
-
 ### Deliberately excluded
 
-- **Dell, Panasonic / Panasonic Connect** — Toughbook/laptop MDTs are ubiquitous
-  patrol gear, but these prefixes sit on tens of millions of consumer machines,
-  so a hit carries no information.
-- **WatchGuard Technologies** (`00:01:21`, `00:90:7F`) — Seattle firewall vendor,
-  unrelated to WatchGuard Video (Plano TX, police video), which *is* included.
-- **Coban SRL** (Italy) — not COBAN Technologies (Houston police video), which has
-  no IEEE assignment.
-- **TAIT Global LLC** (Lititz PA) — not Tait Electronics (NZ radios), which is
-  included.
-- Peplink/Pepwave and similar vehicle-router vendors are included but kept at the
-  broad tier for the same reason as Sierra Wireless/CradlePoint.
+- **Dell, Panasonic** — Toughbook/laptop MDTs are ubiquitous patrol gear, but
+  these prefixes sit on tens of millions of consumer machines.
+- **Peplink / Pepwave** — vehicle routers; false alarms only in field testing.
+- **Name collisions:** WatchGuard Technologies (Seattle firewalls, not
+  WatchGuard Video), Coban SRL (Italy, not COBAN Technologies of Houston), TAIT
+  Global LLC (not Tait Electronics), Axon Networks Inc. (not Axon Enterprise),
+  Vutility Inc. (not Utility Inc./BodyWorn).
+- **Lite-On probe-request OUIs** (`24:B2:B9`, `F4:6A:DD`, `D8:F3:BC`,
+  `C0:35:32`) — other projects use these to catch current Flock Falcons acting
+  as WiFi clients, but ordinary laptops send probes with the same OUIs.
 
-### Still absent from IEEE entirely
-
-Whelen, Code 3, SoundOff Signal, MPH Industries, Getac, and COBAN Technologies
-(Houston) have no IEEE assignments — most lightbars and many radar heads aren't
-IP devices at all, so there's nothing to match on.
+Whelen, Code 3, SoundOff Signal, MPH Industries, Getac and COBAN Technologies
+have no IEEE assignments — most lightbars and many radar heads aren't IP
+devices, so there's nothing to match on.
 
 ## SSID watchlist
 
-Independent signal from the OUI table, matched against beacon, probe
-request, and probe response frames. A client configured for a hidden
-network sends its target SSID in cleartext in a directed probe request —
-an 802.11 protocol requirement, not a configuration choice — so this
-survives MAC address randomisation, a hard limit on OUI matching (see
-Known limits below). It's also strictly better evidence than a bare OUI hit
-when it fires on a beacon: a CradlePoint OUI just means "some CradlePoint
-router," a matched `IBR900-`/`IBR1700-` SSID says which model.
+Matched against beacon, probe request and probe response frames,
+independent of the OUI table. A client configured for a hidden network sends
+its target SSID in cleartext in a directed probe request, so this survives MAC
+randomisation. Patterns are case-insensitive prefixes.
 
-Each entry picks a match mode — **prefix** (`IBR900-` matches
-`IBR900-1A2B3C`), **substring** (matches anywhere in the SSID), or
-**prefix+substring** (a prefix *and* a second required substring
-somewhere after it, e.g. pattern `IBR` + required substring `-mobile`
-matches `IBR900-fleet-mobile12` but not `IBR900-fleet` alone — the
-two-fragment-with-a-gap shape a glob would write as `IBR*-mobile`) — and
-matching is case-insensitive. There's no literal wildcard character or
-regex engine, just these three fixed shapes. No IEEE-registry equivalent
-exists for SSIDs; every real row should come from an actual field
-capture (WiGLE surveys, on-site logging), not a guess.
-
-A probe-request hit is weaker evidence than a beacon/probe-response hit —
-a client leaking a network it previously joined isn't proof that network's
-AP is nearby now — so the two are tagged differently on the display
-(`SSID probe: <name>` vs `SSID beacon: <name>`), though both alert the
-same way.
-
-Ships with one live row, `LEDET-TEST`, which is test/demo data, not a real
-vendor signature — labeled as such in the source, in this doc, and in the
-vendor string itself, so it's unmistakable if it ever fires on the OLED.
-Spoof it by renaming a phone hotspot or a saved WiFi profile to
-`LEDET-TEST` to exercise the whole detection/display/alert path without
-needing real LE gear nearby. Comment it out in `ssid_table.cpp` before
-relying on this table for anything real; real entries follow the same
-"comment out a row to disable" convention as the OUI table.
-
-### Complete list
-
-| Prefix | Vendor | Category |
+| Prefix | Vendor | Notes |
 |---|---|---|
-| `PSP-MVR`  | PSP in-car video   | Body/car cam |
-| `PSP-TEST` | PSP facility       | Other |
-| `PSPWLAN`  | PSP facility       | Other |
-| `PSP_UC`   | PSP facility voice | Other |
-| `Flock-`   | Flock Safety setup/health AP | Plate reader |
+| `Flock-` | Flock Safety | Falcon/Sparrow setup/health AP (`Flock-` + MAC). Largely switched off since ~Dec 2025, so this catches older or unpatched units |
+| `ALPRDET-TEST` | TEST/DEMO | Not a real signature. Rename a phone hotspot to this to test the alert path |
 
-All four are prefix matches, deliberately — not substring. A substring
-`PSP` rule tested against the same survey data matched `PSPPetCenter`,
-`PSPRETAIL`, `PSP Neighbor` (a residence), and `BPSPictureU`, all within
-730 m of the Hamburg barracks below. The full prefix string, not the
-shared `PSP` fragment, is what makes these safe to alert on.
-
-### Provenance
-
-Confirmed via WiGLE survey data cross-checked against known Pennsylvania
-State Police barracks coordinates — three independent barracks spanning
-282 km across three different troops, every observation 48–132 m from the
-building, all on Cisco hardware:
-
-| Barracks | Troop | Coordinates |
-|---|---|---|
-| Hamburg | L | 40.5641, -76.0025 |
-| Dunmore (Scranton area) | — | 41.4357, -75.6151 |
-| Bedford | G | 40.0063, -78.3855 |
-
-`PSP-MVR` and `PSP-TEST` were each confirmed at all three sites above.
-Cross-site BSSID correlation — matching Cisco OUI and sub-range
-assignments across independently surveyed barracks, not just a shared
-naming convention — confirms a single statewide deployment rather than
-coincidence. `PSP-MVR` (Mobile Video Recorder, PSP's in-car video system)
-is the highest-value row, since cruisers are configured for it by
-definition, and was last observed 2026-08-25 and 2026-09-05 — current as
-of this writing. `PSPWLAN` and `PSP_UC` were observed at Hamburg only, so
-carry lower confidence than the other two until cross-checked against a
-second site.
-
-**Known limitation**: these are fixed APs at barracks buildings, not
-vehicle-mounted equipment. On the road, a hit here means a cruiser's
-in-car client is directedly probing for one of these SSIDs while out of
-range of the real AP — whether PSP in-car systems actually do that is
-**untested in the field**. Treat a hit on this block as a
-barracks-proximity indicator, not confirmed mobile detection, until
-that's verified.
+A probe-request hit is weaker evidence than a beacon/probe-response hit — a
+client leaking a network it joined before isn't proof that network's AP is
+nearby now — so the display labels them differently (`SSID probe:` vs
+`SSID beacon:`), though both alert the same way.
 
 ## BLE signature table
 
@@ -368,64 +278,58 @@ packs, Raven and newer Axon gear use random or rotating addresses, so their
 OUI means nothing. The table is checked top to bottom and the first match
 wins. Specific signatures (names, vendor UUIDs) come first and the loose ones
 come last (XUNTONG `0x09C8`, the Bluetooth module vendor in Flock's battery
-packs, which other products also use). Each row cites its source. To disable a row,
-comment it out. Motorola's BLE IDs mostly match two-way radios carried by
+packs, which other products also use). Each row cites its source. To disable a
+row, comment it out. Motorola's BLE IDs mostly match two-way radios carried by
 retail and venue staff; uncomment `EXCLUDE_VENDOR_MOTOROLA_BLE` to drop them.
 
 The scan is passive, so data that only appears in a scan response is never
 received. Every shipped row was reported in the primary advertisement.
 
-Not included on purpose: the Lite-On probe-request OUIs that other projects
-use to catch current Falcons acting as WiFi clients. Ordinary laptops send
-probes with the same OUIs. Also left out: the bare 10-digit BLE name, which
-false-positived on a phone in another project's field testing.
+Not included on purpose: the bare 10-digit BLE name some Flock research
+mentions, which false-positived on a phone in another project's field testing.
 
-Test off-target:
+## Testing off-target
 
+The OUI and BLE tables have no Arduino dependency and compile on the host:
+
+    g++ -std=c++11 -o /tmp/test_oui test/test_oui.cpp src/oui_table.cpp -I include && /tmp/test_oui
     g++ -std=c++11 -o /tmp/test_ble_sig test/test_ble_sig.cpp src/ble_sig_table.cpp -I include && /tmp/test_ble_sig
 
 ## Known limits
 
-- **No 5 GHz.** The WROOM-32U is 2.4 GHz only, so it can't see Axon Fleet Hub's
-  5 GHz APs. `le_detector_c5` exists for that.
-- **Cellular-only ALPRs are invisible.** Most non-Flock ALPRs (Vigilant, Genetec
-  Cloudrunner, Axon Outpost, ELSAG fixed units) backhaul over LTE. A 2.4 GHz
-  receiver can't pick that up; the DeFlock map is the better tool for those.
-
 - **One radio.** WiFi and BLE cannot run at once. The firmware alternates
   (`WIFI_PHASE_MS` / `BLE_PHASE_MS`); during each window it is blind to the other.
-- **MAC randomisation.** Only public BLE addresses and non-randomised WiFi MACs
-  carry a real OUI. For OUI matching, randomised addresses are skipped because
-  their vendor bits are meaningless. SSID matching and BLE signature matching
+- **No 5 GHz.** The WROOM-32U is 2.4 GHz only, so it can't see Axon Fleet
+  Hub's 5 GHz APs.
+- **Cellular-only ALPRs are invisible.** Most non-Flock ALPRs (Vigilant,
+  Genetec Cloudrunner, Axon Outpost, ELSAG fixed units) backhaul over LTE. A
+  2.4 GHz receiver can't pick that up; the DeFlock map is the better tool for
+  those.
+- **MAC randomisation.** For OUI matching, randomised addresses are skipped
+  because their vendor bits are meaningless. SSID and BLE signature matching
   don't depend on the address, so randomisation doesn't affect them.
-- **PSP SSID rows are barracks-proximity, not confirmed mobile detection.**
-  All four are fixed APs at barracks buildings — see SSID watchlist
-  Provenance above for the full caveat and why.
 - **SSID matching depends on what's actually broadcast.** A wildcard probe
-  request or a hidden-SSID beacon carries no SSID bytes at all — nothing to
-  match either way. Directed probe requests specifically are a declining
-  signal: modern phone OSes (iOS/Android, roughly 2014-2017 onward) mostly
-  suppress them (randomised MAC + wildcard probes only), so this
-  increasingly only catches older/embedded clients, not phones.
-  Beacon/probe-response SSID matching is unaffected by that trend.
+  request or a hidden-SSID beacon carries no SSID bytes at all. Modern phones
+  mostly send wildcard probes only, so directed-probe matching increasingly
+  only catches older or embedded clients.
 - Repeated WiFi/BLE stack init+deinit every few seconds is necessary given the
-  single shared radio, but watch for heap fragmentation on long runs.
+  single shared radio; watch for heap fragmentation on long runs.
 
 ## Tuning
 
 Everything lives in `include/config.h`: phase lengths, channel dwell,
 flash-rate endpoints (`RSSI_WEAK`/`RSSI_STRONG`, `FLASH_PERIOD_SLOW`/`FAST`),
-alert hold time, and `BUZZER_ENABLED` for silent bench testing.
+alert hold times, and `BUZZER_ENABLED` for silent bench testing.
 
 ## License
 
-GPLv3 (see `LICENSE`), matching the companion `rf_stalker` and
-`police_oui_watchlist` projects.
+GPLv3 (see `LICENSE`).
 
 `src/detector.cpp` and `src/main.cpp` carry their own
-`SPDX-License-Identifier: MIT` line for portions adapted from third-party
-code — see the header comment in each file for attribution, what was
-adapted, and what changed. Everything else in this repo is GPLv3.
+`SPDX-License-Identifier: MIT` line for portions adapted from
+[nyanBOX](https://github.com/jbohack/nyanBOX) (MIT) — the header comment in
+each file says what was adapted and what changed. That attribution is a
+condition of the MIT license and has to stay.
 
 Signature values (not code) were cross-referenced from
 [colonelpanichacks/flock-you](https://github.com/colonelpanichacks/flock-you) (MIT),

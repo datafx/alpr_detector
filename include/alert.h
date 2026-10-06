@@ -24,5 +24,3 @@ void alertUpdate(const DetectorStatus& st, uint32_t holdMs);
 void alertMute();
 
 AlertState alertState();
-uint32_t   alertPeriodMs();   // current flash period, for the UI
-bool       alertOutputOn();   // current on/off phase, for the UI

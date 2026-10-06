@@ -15,7 +15,6 @@ enum Source : uint8_t { SRC_BLE = 0, SRC_WIFI, SRC_PROBE, SRC_BLE_SIG };
 struct TrackedDevice {
     uint8_t      mac[6];
     int16_t      rssi;        // EMA-smoothed
-    uint32_t     firstSeen;
     uint32_t     lastSeen;
     const char*  vendor;
     GearCategory category;
@@ -46,6 +45,3 @@ struct DetectorStatus {
 };
 
 DetectorStatus detectorStatus();
-
-uint8_t  detectorChannel();
-uint16_t detectorSeenTotal();   // every frame/advert we looked at, matched or not

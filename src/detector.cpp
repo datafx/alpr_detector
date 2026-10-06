@@ -1,5 +1,5 @@
 /*
-    LE Gear Detector - scanning core
+    ALPR Detector - scanning core
 
     BLE scan setup / GAP callback structure and the WiFi promiscuous handler are
     adapted from nyanBOX (axon_detector.cpp, device_scout.cpp)
@@ -35,7 +35,6 @@
 static TrackedDevice s_devices[MAX_TRACKED];
 static uint8_t       s_channel = 1;
 static uint32_t      s_lastHop = 0;
-static uint16_t      s_seenTotal = 0;
 static uint32_t      s_lastHitMs = 0;
 
 static bool s_wifiUp = false;
@@ -85,7 +84,6 @@ static void recordMatch(const uint8_t mac[6], int8_t rssi,
     TrackedDevice& d = s_devices[slot];
     memcpy(d.mac, mac, 6);
     d.rssi      = rssi;
-    d.firstSeen = now;
     d.lastSeen  = now;
     d.vendor    = vendor;
     d.category  = category;
@@ -126,8 +124,6 @@ DetectorStatus detectorStatus() {
     return st;
 }
 
-uint8_t  detectorChannel()   { return s_channel; }
-uint16_t detectorSeenTotal() { return s_seenTotal; }
 
 // ---------------------------------------------------------------------------
 // WiFi promiscuous sniffing
@@ -174,8 +170,6 @@ static void IRAM_ATTR wifiSnifferCb(void* buff, wifi_promiscuous_pkt_type_t type
     // addr2 = transmitter address
     const uint8_t* mac = &frame[10];
     if (mac[0] & 0x01) return;   // multicast/broadcast, not a real transmitter
-
-    s_seenTotal++;
 
     // OUI match - meaningless on a randomised address, so skip it there.
     if (!(mac[0] & 0x02)) {
@@ -260,8 +254,6 @@ static esp_ble_scan_params_t s_bleScanParams = {
 };
 
 static void processBleResult(esp_ble_gap_cb_param_t* p) {
-    s_seenTotal++;
-
     const uint8_t* mac = p->scan_rst.bda;
     int8_t rssi = p->scan_rst.rssi;
 
@@ -347,6 +339,5 @@ void detectorStopBlePhase() {
 
 void detectorInit() {
     memset(s_devices, 0, sizeof(s_devices));
-    s_seenTotal = 0;
     s_lastHitMs = 0;
 }

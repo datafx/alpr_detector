@@ -92,5 +92,3 @@ void alertMute() {
 }
 
 AlertState alertState()     { return s_state; }
-uint32_t   alertPeriodMs()  { return s_period; }
-bool       alertOutputOn()  { return s_outputOn; }

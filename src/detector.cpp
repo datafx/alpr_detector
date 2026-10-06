@@ -253,6 +253,30 @@ static esp_ble_scan_params_t s_bleScanParams = {
     .scan_duplicate     = BLE_SCAN_DUPLICATE_DISABLE
 };
 
+#ifdef DEBUG_BLE_SCAN
+// Bench diagnostics only (env:esp32dev_debug) - never in the shipped build,
+// per the no-logging decision. Prints every advert that carries a local name
+// or matched a signature, with its raw payload, so a test transmitter can be
+// checked against what actually arrived.
+static void debugPrintAdv(esp_ble_gap_cb_param_t* p, size_t advLen,
+                          const BleSigEntry* sig, const char* detail) {
+    const uint8_t* adv = p->scan_rst.ble_adv;
+    uint8_t nameLen = 0;
+    const uint8_t* name = esp_ble_resolve_adv_data((uint8_t*)adv, ESP_BLE_AD_TYPE_NAME_CMPL, &nameLen);
+    if (!name) name = esp_ble_resolve_adv_data((uint8_t*)adv, ESP_BLE_AD_TYPE_NAME_SHORT, &nameLen);
+    if (!name && !sig) return;
+
+    const uint8_t* m = p->scan_rst.bda;
+    Serial.printf("[ble] %02x:%02x:%02x:%02x:%02x:%02x t=%u rssi=%d adv=%u rsp=%u name=\"%.*s\" -> %s %s\n  ",
+                  m[0], m[1], m[2], m[3], m[4], m[5], (unsigned)p->scan_rst.ble_addr_type,
+                  p->scan_rst.rssi, p->scan_rst.adv_data_len, p->scan_rst.scan_rsp_len,
+                  name ? nameLen : 0, name ? (const char*)name : "",
+                  sig ? sig->vendor : "(no match)", sig ? detail : "");
+    for (size_t i = 0; i < advLen; i++) Serial.printf("%02x", adv[i]);
+    Serial.printf("\n");
+}
+#endif
+
 static void processBleResult(esp_ble_gap_cb_param_t* p) {
     const uint8_t* mac = p->scan_rst.bda;
     int8_t rssi = p->scan_rst.rssi;
@@ -266,6 +290,9 @@ static void processBleResult(esp_ble_gap_cb_param_t* p) {
     if (advLen > sizeof(p->scan_rst.ble_adv)) advLen = sizeof(p->scan_rst.ble_adv);
     char detail[33];
     const BleSigEntry* sig = bleSigLookup(p->scan_rst.ble_adv, advLen, detail, sizeof(detail));
+#ifdef DEBUG_BLE_SCAN
+    debugPrintAdv(p, advLen, sig, detail);
+#endif
     if (sig) {
         recordMatch(mac, rssi, sig->vendor, sig->category, SRC_BLE_SIG, detail);
         return;

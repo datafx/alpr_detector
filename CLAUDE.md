@@ -30,9 +30,17 @@ jbohack, MIT. The attribution headers in `src/detector.cpp` and
 
 ## Status
 
-Builds clean (`pio run`); both off-target suites pass. The OUI/SSID/alert
-path has been through full hardware bring-up. The BLE signature path has
-**not yet been flashed or field-tested** — see bring-up step 6.
+Builds clean (`pio run`); both off-target suites pass. **Bench-tested on
+hardware 2026-10-06**, with a Linux PC as the transmitter:
+
+| Path | Test signal | Result |
+|---|---|---|
+| WiFi SSID beacon | `nmcli` AP `Flock-A1B2C3`, ch 6 | Alerted — Flock Safety |
+| BLE 16-bit service | bluetoothctl `uuids 0x3100` | Alerted — Flock Raven |
+| BLE company ID | bluetoothctl `manufacturer 0x09c8` | Alerted — Flock? (0x09C8) |
+| BLE local name | temp debug row matching a nearby named consumer device | Matched 10×/30 s from a random address (`t=1`) |
+
+Not yet field-tested against real Flock/Axon gear.
 
 ---
 
@@ -157,7 +165,38 @@ Values only — no code copied.
 
 ---
 
+## Bench-testing notes
+
+- **Debug build** `pio run -e esp32dev_debug -t upload` prints every BLE
+  advert that has a name or matched a signature (MAC, address type, RSSI,
+  raw payload) to serial. Bench only — never ship it (decision 9).
+  `default_envs = esp32dev`, so plain `pio run -t upload` flashes the
+  release build.
+- **Linux can't fake a BLE name a passive scanner sees.** bluetoothctl's
+  `name` goes in the scan response (never received passively); `data 0x09`
+  is refused by BlueZ; `sudo btmgmt add-adv -d <raw>` is accepted but never
+  reached the board. Use a phone advertiser with the name in the advertising
+  data, or a temporary debug row matching a nearby named device.
+- **Set `interval 100 100` in bluetoothctl.** The default ~1.28 s interval
+  makes the alert drop out and re-fire within a 30 s test; at 100 ms it stays
+  on. Real slow beaconers will show the same flicker.
+- **A VM with USB passthrough can grab the CP2102 on plug-in**, leaving it
+  bound to `usbfs` with no usable serial port (kernel log shows "attached to
+  ttyUSBn" then "disconnected" in the same second). Remove the device from
+  the VM's passthrough list. Check the kernel log for the real port number
+  rather than assuming `ttyUSB0`, which can be a stale node.
+- **Reset bursts still happen:** 78 `POWERON_RESET`s in ~10 s right after a
+  flash + RTS pulse, then stable. Same signature as the EN-noise bursts —
+  add the EN–GND cap.
+- When capturing serial while flashing, stop the logger first — two openers
+  on the port make esptool fail.
+
 ## Open decisions
+
+- **Passive vs active BLE scan for names.** If real Flock Penguin units put
+  their name in the scan response, decision 3 makes them invisible; the fix
+  (active scan) transmits scan requests. Decide once a real unit has been
+  captured.
 
 - **Phase timing under real driving.** ~7 s revisit interval per band at
   3.5 s WiFi + 3 s BLE + stack transitions; ~670 ft at 65 mph. Untested.
